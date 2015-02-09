@@ -23,19 +23,28 @@ class GameParser(HTMLParser):
         self.time_remaining = None
         self.countries = {}
         self.current_country_data = None
+        self.side = None
         self.in_left_side = None
         self.country_name_next = False
         self.game_phase_next = False
         self.game_date_next = False
+        self.user_id_next = False
         game_url = "http://webdiplomacy.net/board.php?gameID={}".format(game_id)
         self.feed(requests.get(game_url).text)
 
     def handle_starttag(self, tag, attrs):
         attributes = dict(attrs)
 
-        tag_class = attributes.get("class")
-        if tag_class == "memberLeftSide":
+        tag_class = attributes.get("class", "")
+
+        if "member memberAlternate" in tag_class:
             self.current_country_data = CountryData()
+
+        if tag_class == "memberLeftSide":
+            self.side = "left"
+
+        if "memberRightSide" in tag_class:
+            self.side = "right"
 
         if tag_class == "timeremaining":
             self.time_remaining = int(attributes['unixtime'])
@@ -48,18 +57,17 @@ class GameParser(HTMLParser):
             self.game_date_next = True
             return
 
-        if not self.current_country_data:
-            return
+        if "right" == self.side and tag == "a" and "profile.php" in attributes.get("href"):
+            self.user_id_next = True
 
-        if tag_class:
-            match = re.match("country([1-7])\s+memberStatus(\w+)", tag_class)
-            if match:
-                player_id, status = match.groups()
-                self.current_country_data.player_id = player_id
-                self.current_country_data.status = status
-                self.country_name_next = True
+        match = re.match("country([1-7])\s+memberStatus(\w+)", tag_class)
+        if match:
+            player_id, status = match.groups()
+            self.current_country_data.player_id = player_id
+            self.current_country_data.status = status
+            self.country_name_next = True
 
-        if tag == "img":
+        if self.side == "left" and tag == "img":
             country_state = attributes.get("alt")
             self.current_country_data.state = country_state
 
@@ -76,8 +84,12 @@ class GameParser(HTMLParser):
             self.game_date = data
             self.game_date_next = False
 
+        if self.user_id_next:
+            self.current_country_data.username = data
+            self.user_id_next = False
+
     def handle_endtag(self, tag):
-        if tag == "td" and self.current_country_data:
+        if tag == "tr" and self.current_country_data:
             self.countries[self.current_country_data.name] = self.current_country_data
             self.current_country_data = None
 
