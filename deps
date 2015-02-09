@@ -1,0 +1,57 @@
+#!/usr/bin/env python
+
+import argparse
+import os
+import shutil
+import subprocess
+
+
+def setup_virtual_env():
+    print "Create Virtual Env"
+    if not os.path.exists("venv"):
+        result_code = subprocess.call("virtualenv venv", shell=True)
+
+        if not result_code == 0:
+            raise Exception("Unable to create virtual env")
+
+
+def freeze():
+    if os.path.exists("lib"):
+        shutil.rmtree("lib")
+    os.makedirs("lib")
+
+    return_code = subprocess.call("venv/bin/pip install -r requirements.txt -d lib", shell=True)
+    if return_code != 0:
+        raise Exception("Problem downloading all requirements.")
+
+    print "All requirements were downloaded to lib. These should be added to git."
+
+
+def deploy():
+    subprocess.check_call("venv/bin/pip install -f lib -r requirements.txt --no-index", shell=True)
+
+def main():
+    parser = argparse.ArgumentParser(description="Python Dependency Manager")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--freeze", action='store_true',
+                       help="Download and freeze the requirements listed in requirements.txt to lib")
+    group.add_argument("--deploy", action='store_true',
+                       help="Install the requirements listed requirements.txt from lib")
+
+    args = parser.parse_args()
+    setup_virtual_env()
+    if args.freeze:
+        freeze()
+    elif args.deploy:
+        deploy()
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
+
